@@ -18,6 +18,10 @@ export const aiGenerateReportApi = (data) =>
 export const createReportApi = (data) =>
   axiosInstance.post("/reports", data);
 
+// YAHAN NEW API ADD KI GAYI HAI
+export const updateReportApi = (id, data) =>
+  axiosInstance.patch(`/reports/${id}`, data);
+
 export const getDoctorReportsApi = () =>
   axiosInstance.get("/reports/doctor");
 

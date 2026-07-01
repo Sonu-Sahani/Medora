@@ -6,6 +6,7 @@ import {
   deleteTemplate,
   aiGenerateReport,
   createReport,
+  updateReport, // NEW UPDATE IMPORT
   getDoctorReports,
   getDoctorDrafts,
   getPatientReports,
@@ -16,7 +17,6 @@ import { verifyToken } from "../middlewares/auth.middleware.js";
 import { restrictTo } from "../middlewares/role.middleware.js";
 
 const router = Router();
-
 router.use(verifyToken);
 
 // Templates (doctor only)
@@ -30,6 +30,7 @@ router.post("/ai-generate", restrictTo("doctor"), aiGenerateReport);
 
 // Reports
 router.post("/", restrictTo("doctor"), createReport);
+router.patch("/:id", restrictTo("doctor"), updateReport); // NEW PATCH ROUTE
 router.get("/doctor", restrictTo("doctor"), getDoctorReports);
 router.get("/doctor/drafts", restrictTo("doctor"), getDoctorDrafts);
 router.get("/patient", restrictTo("patient"), getPatientReports);

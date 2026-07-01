@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   FileText, Sparkles, Save, Send,
   ArrowLeft, ChevronDown, ChevronUp,
-  Loader2, Download,
+  Loader2,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useEditor, EditorContent } from "@tiptap/react";
@@ -17,7 +17,13 @@ import Button from "../../components/common/Button.jsx";
 import Loader from "../../components/common/Loader.jsx";
 import Input from "../../components/common/Input.jsx";
 import { getDoctorAppointmentsApi } from "../../api/doctor.api.js";
-import { getTemplatesApi, aiGenerateReportApi, createReportApi } from "../../api/report.api.js";
+import { 
+  getTemplatesApi, 
+  aiGenerateReportApi, 
+  createReportApi,
+  getReportByIdApi, // ADDED
+  updateReportApi   // ADDED
+} from "../../api/report.api.js";
 
 // Quick phrases per specialty
 const QUICK_PHRASES = {
@@ -47,10 +53,8 @@ const QUICK_PHRASES = {
   ],
 };
 
-// Tiptap Toolbar
 const EditorToolbar = ({ editor }) => {
   if (!editor) return null;
-
   const btn = (action, label, isActive = false) => (
     <button
       type="button"
@@ -64,7 +68,6 @@ const EditorToolbar = ({ editor }) => {
       {label}
     </button>
   );
-
   return (
     <div className="flex flex-wrap gap-1.5 p-3 border-b border-slate-100 bg-slate-50 rounded-t-xl">
       {btn(() => editor.chain().focus().toggleBold().run(), "B", editor.isActive("bold"))}
@@ -88,6 +91,7 @@ const CreateReportPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const appointmentId = searchParams.get("appointmentId");
+  const draftId = searchParams.get("draftId"); // URL se Draft ID get karna
 
   const [appointments, setAppointments] = useState([]);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
@@ -101,6 +105,7 @@ const CreateReportPage = () => {
   const [doctorNotes, setDoctorNotes] = useState("");
   const [showPhrases, setShowPhrases] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [initialDraftContent, setInitialDraftContent] = useState(""); // For Tiptap content
 
   const editor = useEditor({
     extensions: [
@@ -118,6 +123,13 @@ const CreateReportPage = () => {
     },
   });
 
+  // Editor me content load hone ka logic
+  useEffect(() => {
+    if (editor && initialDraftContent) {
+      editor.commands.setContent(initialDraftContent);
+    }
+  }, [editor, initialDraftContent]);
+
   useEffect(() => {
     const init = async () => {
       try {
@@ -128,7 +140,24 @@ const CreateReportPage = () => {
         setAppointments(aptRes.data.data);
         setTemplates(tplRes.data.data);
 
-        if (appointmentId) {
+        // Agar draft ID maujud hai toh report database se fetch karo
+        if (draftId) {
+          const reportRes = await getReportByIdApi(draftId);
+          const reportData = reportRes.data.data;
+          
+          setTitle(reportData.title || "");
+          setDiagnosis(reportData.diagnosis || "");
+          setPrescription(reportData.prescription || "");
+          if (reportData.followUpDate) {
+            setFollowUpDate(new Date(reportData.followUpDate).toISOString().split("T")[0]);
+          }
+          setInitialDraftContent(reportData.content || "");
+          
+          const targetAptId = reportData.appointment?._id || reportData.appointment;
+          const foundApt = aptRes.data.data.find((a) => a._id === targetAptId);
+          if (foundApt) setSelectedAppointment(foundApt);
+
+        } else if (appointmentId) {
           const found = aptRes.data.data.find((a) => a._id === appointmentId);
           if (found) setSelectedAppointment(found);
         }
@@ -139,7 +168,7 @@ const CreateReportPage = () => {
       }
     };
     init();
-  }, [appointmentId]);
+  }, [appointmentId, draftId]);
 
   const handleAIGenerate = async () => {
     if (!selectedAppointment) {
@@ -174,7 +203,7 @@ const CreateReportPage = () => {
 
     setSaving(true);
     try {
-      await createReportApi({
+      const payload = {
         appointmentId: selectedAppointment._id,
         title,
         content: editor.getHTML(),
@@ -183,13 +212,21 @@ const CreateReportPage = () => {
         followUpDate: followUpDate || null,
         aiGenerated: false,
         status,
-      });
+      };
+
+      // Yahan check kar rahe hain, agar edit page hai toh Update API hit hoga
+      if (draftId) {
+        await updateReportApi(draftId, payload);
+      } else {
+        await createReportApi(payload);
+      }
+
       toast.success(
         status === "finalized"
           ? "Report finalized and sent to patient!"
           : "Report saved as draft"
       );
-      navigate("/doctor/appointments");
+      navigate("/doctor/dashboard"); // Dashboard ya appointments page jahan bhejna chaho
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to save report");
     } finally {
@@ -217,7 +254,9 @@ const CreateReportPage = () => {
           <ArrowLeft size={18} className="text-slate-600" />
         </button>
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Create Medical Report</h1>
+          <h1 className="text-2xl font-bold text-slate-800">
+             {draftId ? "Edit Draft Report" : "Create Medical Report"}
+          </h1>
           <p className="text-slate-500 text-sm mt-0.5">
             AI-assisted report generation with PDF export.
           </p>
@@ -239,6 +278,7 @@ const CreateReportPage = () => {
                 setSelectedAppointment(apt || null);
               }}
               className="input-field"
+              disabled={!!draftId} // Draft edit karte waqt appointment change nahi hona chahiye
             >
               <option value="">-- Select a confirmed appointment --</option>
               {appointments.map((apt) => (
@@ -419,7 +459,7 @@ const CreateReportPage = () => {
               onClick={() => handleSave("draft")}
             >
               <Save size={16} />
-              Save as Draft
+              {draftId ? "Update Draft" : "Save as Draft"}
             </Button>
             <Button
               fullWidth

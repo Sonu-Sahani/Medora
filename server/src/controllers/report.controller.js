@@ -187,6 +187,86 @@ const createReport = asyncHandler(async (req, res) => {
   res.status(201).json(new ApiResponse(201, populated, "Report created"));
 });
 
+// ADD THIS FUNCTION ANYWHERE AFTER createReport
+// @route PATCH /api/v1/reports/:id
+const updateReport = asyncHandler(async (req, res) => {
+  const { title, content, diagnosis, prescription, followUpDate, status } = req.body;
+  
+  let report = await MedicalReport.findById(req.params.id);
+  if (!report) throw new ApiError(404, "Report not found");
+  
+  if (report.doctor.toString() !== req.user._id.toString()) {
+    throw new ApiError(403, "Not authorized to update this report");
+  }
+
+  report.title = title || report.title;
+  report.content = content || report.content;
+  report.diagnosis = diagnosis !== undefined ? diagnosis : report.diagnosis;
+  report.prescription = prescription !== undefined ? prescription : report.prescription;
+  report.followUpDate = followUpDate !== undefined ? followUpDate : report.followUpDate;
+  
+  if (status) report.status = status;
+
+  // Agar draft se Finalize ho raha hai
+  if (status === "finalized") {
+     const appointment = await Appointment.findById(report.appointment)
+        .populate("patient", "name age gender bloodGroup email")
+        .populate("specialty", "name slug");
+        
+     const doctor = await (await import("../models/Doctor.model.js")).default
+        .findById(req.user._id)
+        .select("name qualifications signature");
+        
+     const { generateReportPDF } = await import("../services/pdf.service.js");
+     const pdfResult = await generateReportPDF({
+        title: report.title,
+        content: report.content,
+        diagnosis: report.diagnosis,
+        prescription: report.prescription,
+        followUpDate: report.followUpDate,
+        patient: appointment.patient,
+        doctor: {
+           name: doctor.name,
+           qualifications: doctor.qualifications,
+        },
+        specialty: appointment.specialty,
+        date: new Date(),
+        signatureUrl: doctor.signature?.url || "",
+     });
+     
+     report.pdfUrl = pdfResult.url;
+     report.pdfPublicId = pdfResult.publicId;
+
+     if (process.env.GEMINI_API_KEY) {
+        try {
+           const { generatePatientSummary } = await import("../services/ai.service.js");
+           const summaryData = await generatePatientSummary({
+              reportContent: report.content,
+              patientName: appointment.patient.name,
+              specialtyName: appointment.specialty.name,
+           });
+           report.aiSummary = summaryData.summary;
+           report.aiPrecautions = summaryData.precautions;
+           report.aiRecommendations = summaryData.recommendations;
+        } catch (err) {
+           console.error("AI summary failed:", err.message);
+        }
+     }
+     
+     appointment.status = "completed";
+     await appointment.save();
+  }
+
+  await report.save();
+
+  const populated = await MedicalReport.findById(report._id)
+    .populate("patient", "name email")
+    .populate("doctor", "name")
+    .populate("specialty", "name");
+
+  res.status(200).json(new ApiResponse(200, populated, "Report updated successfully"));
+});
+
 // @route GET /api/v1/reports/doctor
 const getDoctorReports = asyncHandler(async (req, res) => {
   const reports = await MedicalReport.find({
@@ -280,6 +360,6 @@ const getDoctorDrafts = asyncHandler(async (req, res) => {
 
 export {
   getMyTemplates, createTemplate, updateTemplate, deleteTemplate,
-  aiGenerateReport, createReport, getDoctorReports, getDoctorDrafts,
+  aiGenerateReport, createReport, updateReport,getDoctorReports, getDoctorDrafts,
   getPatientReports, getReportById, deleteReport,
 };

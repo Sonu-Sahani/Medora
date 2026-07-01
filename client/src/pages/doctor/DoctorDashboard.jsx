@@ -2,13 +2,13 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Calendar, Users, FileText, CheckCircle2,
-  Clock, ArrowRight, TrendingUp, Activity,
+  Clock, ArrowRight, TrendingUp, Activity, Trash2
 } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
 import Loader from "../../components/common/Loader.jsx";
 import { useAuth } from "../../hooks/useAuth.js";
 import { getDoctorDashboardStatsApi } from "../../api/doctor.api.js";
-import { getDoctorDraftsApi } from "../../api/report.api.js";
+import { getDoctorDraftsApi, deleteReportApi } from "../../api/report.api.js"; // ADDED deleteReportApi
 import toast from "react-hot-toast";
 
 const StatCard = ({ label, value, icon: Icon, color, sub }) => (
@@ -41,6 +41,17 @@ const DoctorDashboard = () => {
       .catch(() => toast.error("Failed to load dashboard"))
       .finally(() => setLoading(false));
   }, []);
+
+  const handleDeleteDraft = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this draft?")) return;
+    try {
+      await deleteReportApi(id);
+      toast.success("Draft deleted successfully");
+      setDrafts(drafts.filter((d) => d._id !== id));
+    } catch {
+      toast.error("Failed to delete draft");
+    }
+  };
 
   const hour = new Date().getHours();
   const greeting =
@@ -121,8 +132,9 @@ const DoctorDashboard = () => {
               </span>
             </h2>
           </div>
+          {/* SLICE HATAA DIYA GAYA HAI */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {drafts.slice(0, 3).map((draft) => (
+            {drafts.map((draft) => (
               <div
                 key={draft._id}
                 className="bg-white rounded-2xl border border-yellow-100 p-4 hover:shadow-cardHover transition-all duration-300"
@@ -145,14 +157,23 @@ const DoctorDashboard = () => {
                     day: "numeric", month: "short", year: "numeric",
                   })}
                 </p>
-                <button
-                  onClick={() =>
-                    navigate(`/doctor/reports/create?appointmentId=${draft.appointment}&draftId=${draft._id}`)
-                  }
-                  className="w-full text-xs py-2 bg-primary-50 hover:bg-primary-100 text-primary-600 rounded-xl font-semibold transition-colors"
-                >
-                  Continue Editing
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() =>
+                      navigate(`/doctor/reports/create?appointmentId=${draft.appointment}&draftId=${draft._id}`)
+                    }
+                    className="flex-1 text-xs py-2 bg-primary-50 hover:bg-primary-100 text-primary-600 rounded-xl font-semibold transition-colors"
+                  >
+                    Continue Editing
+                  </button>
+                  <button
+                    onClick={() => handleDeleteDraft(draft._id)}
+                    className="p-2 bg-red-50 hover:bg-red-100 text-danger rounded-xl transition-colors"
+                    title="Delete Draft"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
