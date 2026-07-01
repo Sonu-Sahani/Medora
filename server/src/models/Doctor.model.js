@@ -84,6 +84,11 @@ const doctorSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Admin", // doctors are created by admin only
     },
+  avatar: { type: String, default: "" },
+signature: {
+  url: { type: String, default: "" },
+  publicId: { type: String, default: "" },
+},
   },
   { timestamps: true }
 );

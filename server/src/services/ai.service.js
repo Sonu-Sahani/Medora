@@ -1,9 +1,7 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getSpecialtyPrompt, patientSummaryPrompt } from "../config/ai.config.js";
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // Generate AI medical report draft for doctor
 export const generateAIReport = async ({
@@ -16,6 +14,8 @@ export const generateAIReport = async ({
   const systemPrompt = getSpecialtyPrompt(specialtySlug);
 
   const userMessage = `
+${systemPrompt}
+
 Generate a professional medical report based on the following information:
 
 **Patient Information:**
@@ -41,17 +41,18 @@ Please generate a comprehensive, professional medical report in HTML format with
 - Prescription (if applicable)
 - Follow-up Instructions
 
-Use <h3> for section headings, <p> for paragraphs, <ul>/<li> for lists. Keep it professional and medically accurate.
+Use <h3> for section headings, <p> for paragraphs, <ul>/<li> for lists. Keep it professional and medically accurate. Return ONLY the HTML content, no markdown code fences, no explanations.
 `;
 
-  const message = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 2000,
-    system: systemPrompt,
-    messages: [{ role: "user", content: userMessage }],
-  });
+const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+  const result = await model.generateContent(userMessage);
+  const response = result.response;
+  let text = response.text();
 
-  return message.content[0].text;
+  // Clean up any markdown code fences Gemini might add
+  text = text.replace(/```html|```/g, "").trim();
+
+  return text;
 };
 
 // Generate patient-friendly summary
@@ -61,12 +62,14 @@ export const generatePatientSummary = async ({
   specialtyName,
 }) => {
   const userMessage = `
+${patientSummaryPrompt}
+
 Convert this medical report into a simple, patient-friendly summary:
 
 **Report:**
 ${reportContent}
 
-Please provide a JSON response with exactly this structure (no markdown, just JSON):
+Please provide a JSON response with EXACTLY this structure (no markdown, no code fences, just raw JSON):
 {
   "summary": "2-3 paragraph simple explanation of what the report says",
   "precautions": ["precaution 1", "precaution 2", "precaution 3"],
@@ -76,20 +79,17 @@ Please provide a JSON response with exactly this structure (no markdown, just JS
 Write for ${patientName}, a patient visiting ${specialtyName}. Use simple language, be reassuring, and focus on what they need to do next.
 `;
 
-  const message = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 1000,
-    system: patientSummaryPrompt,
-    messages: [{ role: "user", content: userMessage }],
-  });
+const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+  const result = await model.generateContent(userMessage);
+  const response = result.response;
+  let text = response.text();
 
   try {
-    const text = message.content[0].text;
     const clean = text.replace(/```json|```/g, "").trim();
     return JSON.parse(clean);
   } catch {
     return {
-      summary: message.content[0].text,
+      summary: text,
       precautions: [],
       recommendations: [],
     };

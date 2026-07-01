@@ -5,16 +5,17 @@ import { z } from "zod";
 import toast from "react-hot-toast";
 import {
   User, Lock, Clock, Save,
-  Plus, Trash2, Eye, EyeOff,
+  Plus, Trash2, Eye, EyeOff, PenTool,
 } from "lucide-react";
 import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
 import Input from "../../components/common/Input.jsx";
 import Button from "../../components/common/Button.jsx";
-import Loader from "../../components/common/Loader.jsx";
 import { useAuth } from "../../hooks/useAuth.js";
 import {
   updateDoctorProfileApi,
   changeDoctorPasswordApi,
+  uploadSignatureApi,
+  deleteSignatureApi,
 } from "../../api/doctor.api.js";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -53,6 +54,11 @@ const DoctorProfileSettings = () => {
   const [newQual, setNewQual] = useState("");
   const [availability, setAvailability] = useState([]);
 
+  // Signature state
+  const [signaturePreview, setSignaturePreview] = useState(user?.signature?.url || "");
+  const [signatureFile, setSignatureFile] = useState(null);
+  const [signatureLoading, setSignatureLoading] = useState(false);
+
   const {
     register: regProfile,
     handleSubmit: handleProfile,
@@ -79,6 +85,7 @@ const DoctorProfileSettings = () => {
     if (user) {
       setQualifications(user.qualifications || []);
       setAvailability(user.availability || []);
+      setSignaturePreview(user.signature?.url || "");
     }
   }, [user]);
 
@@ -116,11 +123,7 @@ const DoctorProfileSettings = () => {
   const onProfileSubmit = async (data) => {
     setSaving(true);
     try {
-      await updateDoctorProfileApi({
-        ...data,
-        qualifications,
-        availability,
-      });
+      await updateDoctorProfileApi({ ...data, qualifications, availability });
       toast.success("Profile updated successfully!");
     } catch (err) {
       toast.error(err.response?.data?.message || "Update failed");
@@ -142,6 +145,49 @@ const DoctorProfileSettings = () => {
       toast.error(err.response?.data?.message || "Failed");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSignatureFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("File must be under 5MB");
+      return;
+    }
+    setSignatureFile(file);
+    setSignaturePreview(URL.createObjectURL(file));
+  };
+
+  const handleSignatureUpload = async () => {
+    if (!signatureFile) return;
+    setSignatureLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append("signature", signatureFile);
+      const res = await uploadSignatureApi(formData);
+      setSignaturePreview(res.data.data.signature.url);
+      setSignatureFile(null);
+      toast.success("Signature uploaded successfully!");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Upload failed");
+    } finally {
+      setSignatureLoading(false);
+    }
+  };
+
+  const handleSignatureDelete = async () => {
+    if (!window.confirm("Delete your signature?")) return;
+    setSignatureLoading(true);
+    try {
+      await deleteSignatureApi();
+      setSignaturePreview("");
+      setSignatureFile(null);
+      toast.success("Signature deleted");
+    } catch {
+      toast.error("Failed to delete signature");
+    } finally {
+      setSignatureLoading(false);
     }
   };
 
@@ -169,10 +215,11 @@ const DoctorProfileSettings = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit mb-6">
+      <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit mb-6 flex-wrap">
         {[
           { key: "profile", label: "Profile", icon: User },
           { key: "availability", label: "Availability", icon: Clock },
+          { key: "signature", label: "Signature", icon: PenTool },
           { key: "password", label: "Password", icon: Lock },
         ].map(({ key, label, icon: Icon }) => (
           <button
@@ -197,15 +244,8 @@ const DoctorProfileSettings = () => {
           className="bg-white rounded-2xl border border-slate-100 p-6 space-y-5"
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <Input
-              label="Full Name"
-              error={profileErrors.name?.message}
-              {...regProfile("name")}
-            />
-            <Input
-              label="Phone"
-              {...regProfile("phone")}
-            />
+            <Input label="Full Name" error={profileErrors.name?.message} {...regProfile("name")} />
+            <Input label="Phone" {...regProfile("phone")} />
             <Input
               label="Experience (years)"
               type="number"
@@ -221,9 +261,7 @@ const DoctorProfileSettings = () => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              Bio
-            </label>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Bio</label>
             <textarea
               {...regProfile("bio")}
               rows={4}
@@ -297,14 +335,11 @@ const DoctorProfileSettings = () => {
             {DAYS.map((day) => {
               const dayAvail = availability.find((a) => a.day === day);
               const isActive = !!dayAvail;
-
               return (
                 <div
                   key={day}
                   className={`border rounded-2xl p-4 transition-all duration-200 ${
-                    isActive
-                      ? "border-primary-200 bg-primary-50/30"
-                      : "border-slate-100 bg-white"
+                    isActive ? "border-primary-200 bg-primary-50/30" : "border-slate-100 bg-white"
                   }`}
                 >
                   <div className="flex items-center justify-between mb-3">
@@ -371,6 +406,76 @@ const DoctorProfileSettings = () => {
               <Save size={16} />
               Save Availability
             </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Signature Tab */}
+      {activeTab === "signature" && (
+        <div className="bg-white rounded-2xl border border-slate-100 p-6 max-w-lg">
+          <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
+            <PenTool size={17} className="text-primary-600" />
+            Doctor Signature
+          </h3>
+          <p className="text-slate-400 text-sm mb-5">
+            Upload your signature — it will automatically appear on all generated PDF
+            reports. Use a white/transparent background PNG for best results.
+          </p>
+
+          {/* Current Signature Preview */}
+          {signaturePreview ? (
+            <div className="mb-5">
+              <p className="text-xs font-medium text-slate-600 mb-2">Current Signature:</p>
+              <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 inline-block">
+                <img
+                  src={signaturePreview}
+                  alt="Doctor Signature"
+                  className="max-h-20 max-w-xs object-contain"
+                />
+              </div>
+              <div className="mt-3">
+                <button
+                  onClick={handleSignatureDelete}
+                  disabled={signatureLoading}
+                  className="text-xs text-danger hover:underline flex items-center gap-1"
+                >
+                  <Trash2 size={12} />
+                  Delete Signature
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="mb-5 p-6 border-2 border-dashed border-slate-200 rounded-xl text-center text-slate-400">
+              <PenTool size={28} className="mx-auto mb-2 opacity-40" />
+              <p className="text-sm">No signature uploaded yet</p>
+            </div>
+          )}
+
+          {/* Upload New */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Upload New Signature
+            </label>
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={handleSignatureFileChange}
+              className="input-field text-sm file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-primary-50 file:text-primary-600 hover:file:bg-primary-100"
+            />
+            <p className="text-xs text-slate-400 mt-1">
+              PNG recommended (transparent background). Max 5MB.
+            </p>
+
+            {signatureFile && (
+              <Button
+                className="mt-4"
+                loading={signatureLoading}
+                onClick={handleSignatureUpload}
+              >
+                <Save size={16} />
+                Upload Signature
+              </Button>
+            )}
           </div>
         </div>
       )}

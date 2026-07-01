@@ -8,6 +8,7 @@ import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
 import Loader from "../../components/common/Loader.jsx";
 import { useAuth } from "../../hooks/useAuth.js";
 import { getDoctorDashboardStatsApi } from "../../api/doctor.api.js";
+import { getDoctorDraftsApi } from "../../api/report.api.js";
 import toast from "react-hot-toast";
 
 const StatCard = ({ label, value, icon: Icon, color, sub }) => (
@@ -28,12 +29,16 @@ const DoctorDashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
+  const [drafts, setDrafts] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getDoctorDashboardStatsApi()
-      .then((res) => setStats(res.data.data))
-      .catch(() => toast.error("Failed to load stats"))
+    Promise.all([getDoctorDashboardStatsApi(), getDoctorDraftsApi()])
+      .then(([statsRes, draftsRes]) => {
+        setStats(statsRes.data.data);
+        setDrafts(draftsRes.data.data);
+      })
+      .catch(() => toast.error("Failed to load dashboard"))
       .finally(() => setLoading(false));
   }, []);
 
@@ -44,34 +49,10 @@ const DoctorDashboard = () => {
   if (loading) return <DashboardLayout><Loader /></DashboardLayout>;
 
   const statCards = [
-    {
-      label: "Today's Appointments",
-      value: stats?.todayAppointments ?? 0,
-      icon: Calendar,
-      color: "bg-primary-50 text-primary-600",
-      sub: "Scheduled for today",
-    },
-    {
-      label: "Pending",
-      value: stats?.pendingAppointments ?? 0,
-      icon: Clock,
-      color: "bg-yellow-50 text-yellow-600",
-      sub: "Awaiting completion",
-    },
-    {
-      label: "Completed",
-      value: stats?.completedAppointments ?? 0,
-      icon: CheckCircle2,
-      color: "bg-green-50 text-green-600",
-      sub: "Total consultations",
-    },
-    {
-      label: "Reports Created",
-      value: stats?.totalReports ?? 0,
-      icon: FileText,
-      color: "bg-purple-50 text-purple-600",
-      sub: "Medical reports",
-    },
+    { label: "Today's Appointments", value: stats?.todayAppointments ?? 0, icon: Calendar, color: "bg-primary-50 text-primary-600", sub: "Scheduled for today" },
+    { label: "Pending", value: stats?.pendingAppointments ?? 0, icon: Clock, color: "bg-yellow-50 text-yellow-600", sub: "Awaiting completion" },
+    { label: "Completed", value: stats?.completedAppointments ?? 0, icon: CheckCircle2, color: "bg-green-50 text-green-600", sub: "Total consultations" },
+    { label: "Reports Created", value: stats?.totalReports ?? 0, icon: FileText, color: "bg-purple-50 text-purple-600", sub: "Medical reports" },
   ];
 
   return (
@@ -85,9 +66,7 @@ const DoctorDashboard = () => {
         <h1 className="text-2xl font-bold mt-0.5">Dr. {user?.name} 👨‍⚕️</h1>
         <p className="text-primary-200 text-sm mt-1">
           You have{" "}
-          <span className="text-white font-bold">
-            {stats?.todayAppointments || 0}
-          </span>{" "}
+          <span className="text-white font-bold">{stats?.todayAppointments || 0}</span>{" "}
           appointment{stats?.todayAppointments !== 1 ? "s" : ""} today.
         </p>
         <button
@@ -110,27 +89,9 @@ const DoctorDashboard = () => {
       <h2 className="text-base font-bold text-slate-800 mb-3">Quick Actions</h2>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         {[
-          {
-            label: "Today's Schedule",
-            desc: "View & manage appointments",
-            icon: Calendar,
-            color: "bg-primary-50 text-primary-600 border-primary-100",
-            path: "/doctor/appointments",
-          },
-          {
-            label: "Create Report",
-            desc: "AI-assisted report generation",
-            icon: FileText,
-            color: "bg-purple-50 text-purple-600 border-purple-100",
-            path: "/doctor/reports/create",
-          },
-          {
-            label: "My Templates",
-            desc: "Manage report templates",
-            icon: Users,
-            color: "bg-teal-50 text-teal-600 border-teal-100",
-            path: "/doctor/templates",
-          },
+          { label: "Today's Schedule", desc: "View & manage appointments", icon: Calendar, color: "bg-primary-50 text-primary-600 border-primary-100", path: "/doctor/appointments" },
+          { label: "Create Report", desc: "AI-assisted report generation", icon: FileText, color: "bg-purple-50 text-purple-600 border-purple-100", path: "/doctor/reports/create" },
+          { label: "My Templates", desc: "Manage report templates", icon: Users, color: "bg-teal-50 text-teal-600 border-teal-100", path: "/doctor/templates" },
         ].map(({ label, desc, icon: Icon, color, path }) => (
           <button
             key={label}
@@ -148,13 +109,61 @@ const DoctorDashboard = () => {
         ))}
       </div>
 
+      {/* Draft Reports */}
+      {drafts.length > 0 && (
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+              <FileText size={16} className="text-yellow-500" />
+              Draft Reports
+              <span className="bg-yellow-100 text-yellow-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                {drafts.length}
+              </span>
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {drafts.slice(0, 3).map((draft) => (
+              <div
+                key={draft._id}
+                className="bg-white rounded-2xl border border-yellow-100 p-4 hover:shadow-cardHover transition-all duration-300"
+              >
+                <div className="flex items-start justify-between gap-2 mb-3">
+                  <div>
+                    <p className="font-semibold text-slate-800 text-sm line-clamp-1">
+                      {draft.title}
+                    </p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {draft.patient?.name} · {draft.specialty?.name}
+                    </p>
+                  </div>
+                  <span className="text-xs bg-yellow-50 text-yellow-700 border border-yellow-200 px-2 py-0.5 rounded-full shrink-0">
+                    Draft
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mb-3">
+                  {new Date(draft.createdAt).toLocaleDateString("en-IN", {
+                    day: "numeric", month: "short", year: "numeric",
+                  })}
+                </p>
+                <button
+                  onClick={() =>
+                    navigate(`/doctor/reports/create?appointmentId=${draft.appointment}&draftId=${draft._id}`)
+                  }
+                  className="w-full text-xs py-2 bg-primary-50 hover:bg-primary-100 text-primary-600 rounded-xl font-semibold transition-colors"
+                >
+                  Continue Editing
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Recent Appointments */}
       {stats?.recentAppointments?.length > 0 && (
         <>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-bold text-slate-800">
-              Recent Appointments
-            </h2>
+            <h2 className="text-base font-bold text-slate-800">Recent Appointments</h2>
             <button
               onClick={() => navigate("/doctor/appointments")}
               className="text-xs text-primary-600 font-semibold hover:underline flex items-center gap-1"
@@ -167,9 +176,7 @@ const DoctorDashboard = () => {
               <div
                 key={apt._id}
                 className={`flex items-center justify-between p-4 ${
-                  i !== stats.recentAppointments.length - 1
-                    ? "border-b border-slate-50"
-                    : ""
+                  i !== stats.recentAppointments.length - 1 ? "border-b border-slate-50" : ""
                 }`}
               >
                 <div className="flex items-center gap-3">
@@ -177,26 +184,18 @@ const DoctorDashboard = () => {
                     {apt.patient?.name?.charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-slate-800">
-                      {apt.patient?.name}
-                    </p>
+                    <p className="text-sm font-semibold text-slate-800">{apt.patient?.name}</p>
                     <p className="text-xs text-slate-400">
-                      {new Date(apt.date).toLocaleDateString("en-IN", {
-                        day: "numeric", month: "short",
-                      })}{" "}
-                      · {apt.slot}
+                      {new Date(apt.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })} · {apt.slot}
                     </p>
                   </div>
                 </div>
                 <span
                   className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-                    apt.status === "confirmed"
-                      ? "bg-green-50 text-green-700"
-                      : apt.status === "completed"
-                      ? "bg-blue-50 text-blue-700"
-                      : apt.status === "cancelled"
-                      ? "bg-red-50 text-red-700"
-                      : "bg-yellow-50 text-yellow-700"
+                    apt.status === "confirmed" ? "bg-green-50 text-green-700"
+                    : apt.status === "completed" ? "bg-blue-50 text-blue-700"
+                    : apt.status === "cancelled" ? "bg-red-50 text-red-700"
+                    : "bg-yellow-50 text-yellow-700"
                   }`}
                 >
                   {apt.status}

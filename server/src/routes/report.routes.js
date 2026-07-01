@@ -7,6 +7,7 @@ import {
   aiGenerateReport,
   createReport,
   getDoctorReports,
+  getDoctorDrafts,
   getPatientReports,
   getReportById,
   deleteReport,
@@ -30,6 +31,7 @@ router.post("/ai-generate", restrictTo("doctor"), aiGenerateReport);
 // Reports
 router.post("/", restrictTo("doctor"), createReport);
 router.get("/doctor", restrictTo("doctor"), getDoctorReports);
+router.get("/doctor/drafts", restrictTo("doctor"), getDoctorDrafts);
 router.get("/patient", restrictTo("patient"), getPatientReports);
 router.get("/:id", getReportById);
 router.delete("/:id", deleteReport);

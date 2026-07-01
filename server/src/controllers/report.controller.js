@@ -97,16 +97,12 @@ const aiGenerateReport = asyncHandler(async (req, res) => {
 // ==================== REPORTS ====================
 
 // @route POST /api/v1/reports
+// createReport function ke andar — doctor.specialty fetch karne ke baad
 const createReport = asyncHandler(async (req, res) => {
   const {
-    appointmentId,
-    title,
-    content,
-    diagnosis,
-    prescription,
-    followUpDate,
-    aiGenerated,
-    status,
+    appointmentId, title, content,
+    diagnosis, prescription, followUpDate,
+    aiGenerated, status,
   } = req.body;
 
   const appointment = await Appointment.findById(appointmentId)
@@ -118,7 +114,12 @@ const createReport = asyncHandler(async (req, res) => {
     throw new ApiError(403, "Not authorized");
   }
 
-  // Generate PDF
+  // Fetch doctor with signature
+  const doctor = await (await import("../models/Doctor.model.js")).default
+    .findById(req.user._id)
+    .select("name qualifications signature");
+
+  // Generate PDF with signature
   const pdfResult = await generateReportPDF({
     title,
     content,
@@ -126,17 +127,21 @@ const createReport = asyncHandler(async (req, res) => {
     prescription,
     followUpDate,
     patient: appointment.patient,
-    doctor: req.user,
+    doctor: {
+      name: doctor.name,
+      qualifications: doctor.qualifications,
+    },
     specialty: appointment.specialty,
     date: new Date(),
+    signatureUrl: doctor.signature?.url || "",
   });
 
-  // Generate patient-friendly AI summary if finalizing
+  // AI Summary if finalizing
   let aiSummary = "";
   let aiPrecautions = [];
   let aiRecommendations = [];
 
-  if (status === "finalized" && process.env.ANTHROPIC_API_KEY) {
+  if (status === "finalized" && process.env.GEMINI_API_KEY) {
     try {
       const summaryData = await generatePatientSummary({
         reportContent: content,
@@ -147,7 +152,7 @@ const createReport = asyncHandler(async (req, res) => {
       aiPrecautions = summaryData.precautions;
       aiRecommendations = summaryData.recommendations;
     } catch (err) {
-      console.error("AI summary generation failed:", err.message);
+      console.error("AI summary failed:", err.message);
     }
   }
 
@@ -156,8 +161,7 @@ const createReport = asyncHandler(async (req, res) => {
     doctor: req.user._id,
     appointment: appointmentId,
     specialty: appointment.specialty._id,
-    title,
-    content,
+    title, content,
     diagnosis: diagnosis || "",
     prescription: prescription || "",
     followUpDate: followUpDate || null,
@@ -170,7 +174,6 @@ const createReport = asyncHandler(async (req, res) => {
     aiRecommendations,
   });
 
-  // Update appointment status to completed
   if (status === "finalized") {
     appointment.status = "completed";
     await appointment.save();
@@ -261,15 +264,22 @@ const deleteReport = asyncHandler(async (req, res) => {
   res.status(200).json(new ApiResponse(200, {}, "Report deleted successfully"));
 });
 
+// @route GET /api/v1/reports/doctor/drafts
+const getDoctorDrafts = asyncHandler(async (req, res) => {
+  const drafts = await MedicalReport.find({
+    doctor: req.user._id,
+    status: "draft",
+    deletedByDoctor: false,
+  })
+    .populate("patient", "name email")
+    .populate("specialty", "name")
+    .sort({ createdAt: -1 });
+
+  res.status(200).json(new ApiResponse(200, drafts, "Drafts fetched"));
+});
+
 export {
-  getMyTemplates,
-  createTemplate,
-  updateTemplate,
-  deleteTemplate,
-  aiGenerateReport,
-  createReport,
-  getDoctorReports,
-  getPatientReports,
-  getReportById,
-  deleteReport,
+  getMyTemplates, createTemplate, updateTemplate, deleteTemplate,
+  aiGenerateReport, createReport, getDoctorReports, getDoctorDrafts,
+  getPatientReports, getReportById, deleteReport,
 };

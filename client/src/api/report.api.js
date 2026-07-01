@@ -1,6 +1,5 @@
 import axiosInstance from "./axiosInstance.js";
 
-// Templates
 export const getTemplatesApi = () =>
   axiosInstance.get("/reports/templates");
 
@@ -13,16 +12,17 @@ export const updateTemplateApi = (id, data) =>
 export const deleteTemplateApi = (id) =>
   axiosInstance.delete(`/reports/templates/${id}`);
 
-// AI Generation
 export const aiGenerateReportApi = (data) =>
   axiosInstance.post("/reports/ai-generate", data);
 
-// Reports
 export const createReportApi = (data) =>
   axiosInstance.post("/reports", data);
 
 export const getDoctorReportsApi = () =>
   axiosInstance.get("/reports/doctor");
+
+export const getDoctorDraftsApi = () =>
+  axiosInstance.get("/reports/doctor/drafts");
 
 export const getPatientReportsApi = () =>
   axiosInstance.get("/reports/patient");

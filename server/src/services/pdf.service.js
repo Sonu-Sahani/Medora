@@ -1,7 +1,6 @@
 import cloudinary from "../config/cloudinary.js";
 import puppeteer from "puppeteer";
 
-// Generate PDF from report content and upload to Cloudinary
 export const generateReportPDF = async ({
   title,
   content,
@@ -12,6 +11,7 @@ export const generateReportPDF = async ({
   doctor,
   specialty,
   date,
+  signatureUrl = "",
 }) => {
   const html = `
 <!DOCTYPE html>
@@ -35,14 +35,6 @@ export const generateReportPDF = async ({
       padding-bottom: 20px;
       border-bottom: 3px solid #2563eb;
       margin-bottom: 24px;
-    }
-    .brand { display: flex; align-items: center; gap: 10px; }
-    .brand-icon {
-      width: 40px; height: 40px;
-      background: #2563eb;
-      border-radius: 10px;
-      display: flex; align-items: center; justify-content: center;
-      color: white; font-weight: 800; font-size: 16px;
     }
     .brand-name { font-size: 22px; font-weight: 800; color: #1e293b; }
     .brand-name span { color: #2563eb; }
@@ -68,13 +60,7 @@ export const generateReportPDF = async ({
       margin-bottom: 8px;
     }
     .info-card p { color: #374151; margin-bottom: 3px; font-size: 12px; }
-    .info-card p span { color: #64748b; font-size: 11px; }
-    .report-title {
-      font-size: 18px;
-      font-weight: 700;
-      color: #1e293b;
-      margin-bottom: 6px;
-    }
+    .report-title { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
     .specialty-badge {
       display: inline-block;
       background: #eff6ff;
@@ -85,24 +71,20 @@ export const generateReportPDF = async ({
       border-radius: 20px;
       margin-bottom: 20px;
     }
-    .section { margin-bottom: 20px; }
     .section h3 {
       font-size: 13px;
       font-weight: 700;
-      color: #1e293b;
       border-left: 3px solid #2563eb;
       padding-left: 10px;
       margin-bottom: 10px;
+      margin-top: 16px;
     }
-    .section p { color: #374151; margin-bottom: 6px; }
-    .section ul { padding-left: 16px; }
-    .section ul li { color: #374151; margin-bottom: 4px; }
     .highlight-box {
       background: #eff6ff;
       border: 1px solid #bfdbfe;
       border-radius: 8px;
       padding: 12px 16px;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
     }
     .highlight-box h4 {
       color: #1d4ed8;
@@ -118,18 +100,21 @@ export const generateReportPDF = async ({
       justify-content: space-between;
       align-items: flex-end;
     }
-    .signature-box { text-align: right; }
+    .signature-section { text-align: right; }
+    .signature-img {
+      max-width: 160px;
+      max-height: 60px;
+      margin-bottom: 4px;
+      margin-left: auto;
+      display: block;
+    }
     .signature-line {
       border-top: 1px solid #94a3b8;
       width: 160px;
       margin-left: auto;
       margin-bottom: 4px;
     }
-    .footer-note {
-      font-size: 10px;
-      color: #94a3b8;
-      max-width: 300px;
-    }
+    .footer-note { font-size: 10px; color: #94a3b8; max-width: 300px; }
     .expiry-notice {
       background: #fef3c7;
       border: 1px solid #fde68a;
@@ -142,25 +127,20 @@ export const generateReportPDF = async ({
   </style>
 </head>
 <body>
-  <!-- Header -->
   <div class="header">
-    <div class="brand">
-      <div class="brand-icon">M</div>
-      <div>
-        <div class="brand-name">Med<span>ora</span></div>
-        <div style="font-size:10px;color:#64748b;">Healthcare Management Platform</div>
-      </div>
+    <div>
+      <div class="brand-name">Med<span>ora</span></div>
+      <div style="font-size:10px;color:#64748b;margin-top:2px;">Healthcare Management Platform</div>
     </div>
     <div class="report-meta">
       <strong>Medical Report</strong>
       Date: ${new Date(date).toLocaleDateString("en-IN", {
-        day: "numeric", month: "long", year: "numeric"
+        day: "numeric", month: "long", year: "numeric",
       })}<br/>
       Report ID: RPT-${Date.now().toString().slice(-6)}
     </div>
   </div>
 
-  <!-- Patient & Doctor Info -->
   <div class="patient-doctor-grid">
     <div class="info-card">
       <h4>Patient Information</h4>
@@ -174,40 +154,35 @@ export const generateReportPDF = async ({
       <h4>Consulting Doctor</h4>
       <p><strong>Dr. ${doctor.name}</strong></p>
       <p>Specialty: <span>${specialty.name}</span></p>
+      ${doctor.qualifications?.length ? `<p>Qualifications: <span>${doctor.qualifications.join(", ")}</span></p>` : ""}
     </div>
   </div>
 
-  <!-- Report Title -->
   <div class="report-title">${title}</div>
   <div class="specialty-badge">${specialty.name}</div>
 
-  <!-- Main Content -->
   <div class="section">${content}</div>
 
-  <!-- Diagnosis -->
   ${diagnosis ? `
   <div class="highlight-box">
     <h4>Diagnosis</h4>
     <p>${diagnosis}</p>
   </div>` : ""}
 
-  <!-- Prescription -->
   ${prescription ? `
   <div class="highlight-box">
     <h4>Prescription / Treatment Plan</h4>
     <p>${prescription}</p>
   </div>` : ""}
 
-  <!-- Follow Up -->
   ${followUpDate ? `
   <div class="highlight-box">
     <h4>Follow-up Date</h4>
     <p>${new Date(followUpDate).toLocaleDateString("en-IN", {
-      weekday: "long", day: "numeric", month: "long", year: "numeric"
+      weekday: "long", day: "numeric", month: "long", year: "numeric",
     })}</p>
   </div>` : ""}
 
-  <!-- Footer -->
   <div class="footer">
     <div>
       <p class="footer-note">
@@ -218,17 +193,18 @@ export const generateReportPDF = async ({
         ⚠️ This report will be automatically deleted after 30 days.
       </div>
     </div>
-    <div class="signature-box">
-      <div class="signature-line"></div>
+    <div class="signature-section">
+      ${signatureUrl
+        ? `<img src="${signatureUrl}" class="signature-img" alt="Doctor Signature" />`
+        : `<div class="signature-line"></div>`
+      }
       <p style="font-size:12px;font-weight:700;">Dr. ${doctor.name}</p>
       <p style="font-size:11px;color:#64748b;">${specialty.name} Specialist</p>
     </div>
   </div>
 </body>
-</html>
-  `;
+</html>`;
 
-  // Generate PDF with Puppeteer
   const browser = await puppeteer.launch({
     headless: "new",
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
@@ -245,7 +221,6 @@ export const generateReportPDF = async ({
 
   await browser.close();
 
-  // Upload to Cloudinary with 30-day expiry
   const result = await new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(
       {
@@ -268,7 +243,6 @@ export const generateReportPDF = async ({
   };
 };
 
-// Delete PDF from Cloudinary
 export const deleteFromCloudinary = async (publicId) => {
   try {
     await cloudinary.uploader.destroy(publicId, { resource_type: "raw" });

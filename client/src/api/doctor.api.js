@@ -9,13 +9,18 @@ export const getDoctorAppointmentsApi = (params = {}) => {
 };
 
 export const updateAppointmentStatusApi = (id, status, reason = "") =>
-  axiosInstance.patch(`/doctors/me/appointments/${id}/status`, {
-    status,
-    reason,
-  });
+  axiosInstance.patch(`/doctors/me/appointments/${id}/status`, { status, reason });
 
 export const updateDoctorProfileApi = (data) =>
   axiosInstance.patch("/doctors/me/profile", data);
 
 export const changeDoctorPasswordApi = (data) =>
   axiosInstance.patch("/doctors/me/change-password", data);
+
+export const uploadSignatureApi = (formData) =>
+  axiosInstance.post("/doctors/me/signature", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+
+export const deleteSignatureApi = () =>
+  axiosInstance.delete("/doctors/me/signature");
