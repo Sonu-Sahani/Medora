@@ -17,6 +17,8 @@ import AdminDashboard from "../pages/admin/AdminDashboard.jsx";
 
 import ProtectedRoute from "./ProtectedRoute.jsx";
 import RoleBasedRoute from "./RoleBasedRoute.jsx";
+import ForgotPasswordPage from "../pages/public/ForgotPasswordPage.jsx";
+import VerifyEmailPage from "../pages/public/VerifyEmailPage.jsx";
 
 const PatientRoute = ({ children }) => (
   <ProtectedRoute>
@@ -49,6 +51,8 @@ const AppRoutes = () => {
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
 
       {/* Patient Routes */}
       <Route path="/patient/dashboard" element={<PatientRoute><PatientDashboard /></PatientRoute>} />

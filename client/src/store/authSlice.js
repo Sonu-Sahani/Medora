@@ -74,12 +74,16 @@ const authSlice = createSlice({
         state.loading = true;
         state.error = null;
       })
-      .addCase(registerPatient.fulfilled, (state, action) => {
-        state.loading = false;
-        state.user = action.payload.user;
-        state.role = action.payload.role;
-        state.isAuthenticated = true;
-      })
+      // .addCase(registerPatient.fulfilled, (state, action) => {
+      //   state.loading = false;
+      //   state.user = action.payload.user;
+      //   state.role = action.payload.role;
+      //   state.isAuthenticated = true;
+      // })
+      .addCase(registerPatient.fulfilled, (state) => {
+  state.loading = false;
+  // Don't set authenticated yet - email verification pending
+})
       .addCase(registerPatient.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;

@@ -30,17 +30,23 @@ const RegisterPage = () => {
   } = useForm({ resolver: zodResolver(schema) });
 
   const onSubmit = async (data) => {
-    setLoading(true);
-    const result = await dispatch(registerPatient(data));
-    setLoading(false);
+  setLoading(true);
+  const result = await dispatch(registerPatient(data));
+  setLoading(false);
 
-    if (registerPatient.fulfilled.match(result)) {
-      toast.success("Account created successfully!");
-      navigate("/patient/dashboard");
+  if (registerPatient.fulfilled.match(result)) {
+    toast.success("OTP sent to your email!");
+    // Email verify page pe navigate karo, email state mein pass karo
+    navigate("/verify-email", { state: { email: data.email } });
+  } else {
+    // Agar account exists but not verified
+    if (result.payload?.includes("not verified")) {
+      navigate("/verify-email", { state: { email: data.email } });
     } else {
       toast.error(result.payload || "Registration failed");
     }
-  };
+  }
+};
 
   return (
   <div className="min-h-screen bg-gradient-to-br from-primary-50 via-background to-secondary-50">

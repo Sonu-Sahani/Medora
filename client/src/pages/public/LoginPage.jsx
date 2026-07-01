@@ -102,6 +102,16 @@ const LoginPage = () => {
             {...register("password")}
           />
 
+          {/* Password field ke baad, Button ke pehle ye add karo: */}
+<div className="flex justify-end">
+  <Link
+    to="/forgot-password"
+    className="text-xs text-primary-600 hover:underline font-medium"
+  >
+    Forgot password?
+  </Link>
+</div>
+
           <Button type="submit" fullWidth loading={loading}>
             Log In
           </Button>
