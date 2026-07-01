@@ -4,6 +4,7 @@ import specialtyRoutes from "./specialty.routes.js";
 import doctorRoutes from "./doctor.routes.js";
 import patientRoutes from "./patient.routes.js";
 import appointmentRoutes from "./appointment.routes.js";
+import reportRoutes from "./report.routes.js";
 
 const router = Router();
 
@@ -12,5 +13,6 @@ router.use("/specialties", specialtyRoutes);
 router.use("/doctors", doctorRoutes);
 router.use("/patient", patientRoutes);
 router.use("/appointments", appointmentRoutes);
+router.use("/reports", reportRoutes);
 
 export default router;
