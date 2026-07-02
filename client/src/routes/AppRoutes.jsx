@@ -26,6 +26,10 @@ import AdminDashboard from "../pages/admin/AdminDashboard.jsx";
 import ProtectedRoute from "./ProtectedRoute.jsx";
 import RoleBasedRoute from "./RoleBasedRoute.jsx";
 
+import ManageDoctorsPage from "../pages/admin/ManageDoctorsPage.jsx";
+import ManagePatientsPage from "../pages/admin/ManagePatientsPage.jsx";
+import ManageAppointmentsPage from "../pages/admin/ManageAppointmentsPage.jsx";
+
 const PatientRoute = ({ children }) => (
   <ProtectedRoute>
     <RoleBasedRoute allowedRoles={["patient"]}>{children}</RoleBasedRoute>
@@ -73,6 +77,10 @@ const AppRoutes = () => {
 
       {/* Admin Routes */}
       <Route path="/admin/dashboard" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+
+      <Route path="/admin/doctors" element={<AdminRoute><ManageDoctorsPage /></AdminRoute>} />
+<Route path="/admin/patients" element={<AdminRoute><ManagePatientsPage /></AdminRoute>} />
+<Route path="/admin/appointments" element={<AdminRoute><ManageAppointmentsPage /></AdminRoute>} />
 
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
