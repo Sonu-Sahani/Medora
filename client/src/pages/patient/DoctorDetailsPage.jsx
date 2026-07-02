@@ -8,27 +8,34 @@ import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
 import Loader from "../../components/common/Loader.jsx";
 import { getDoctorByIdApi } from "../../api/patient.api.js";
 import toast from "react-hot-toast";
+import { getDoctorReviewsApi } from "../../api/review.api.js";
 
 const DoctorDetailsPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [doctor, setDoctor] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [reviews, setReviews] = useState([]);
+const [showAllReviews, setShowAllReviews] = useState(false);
 
   useEffect(() => {
-    const fetchDoctor = async () => {
-      try {
-        const res = await getDoctorByIdApi(id);
-        setDoctor(res.data.data);
-      } catch {
-        toast.error("Doctor not found");
-        navigate("/patient/specialties");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchDoctor();
-  }, [id]);
+  const fetchDoctor = async () => {
+    try {
+      const [doctorRes, reviewsRes] = await Promise.all([
+        getDoctorByIdApi(id),
+        getDoctorReviewsApi(id),
+      ]);
+      setDoctor(doctorRes.data.data);
+      setReviews(reviewsRes.data.data);
+    } catch {
+      toast.error("Doctor not found");
+      navigate("/patient/specialties");
+    } finally {
+      setLoading(false);
+    }
+  };
+  fetchDoctor();
+}, [id]);
 
   if (loading) return (
     <DashboardLayout>
@@ -171,6 +178,58 @@ const DoctorDetailsPage = () => {
             <p className="text-slate-400 text-sm mb-5">
               Consultation fee: ₹{doctor.consultationFee}
             </p>
+
+            {/* Reviews */}
+{reviews.length > 0 && (
+  <div className="bg-white rounded-2xl border border-slate-100 p-6">
+    <h2 className="font-bold text-slate-800 mb-4">
+      Patient Reviews ({reviews.length})
+    </h2>
+    <div className="space-y-4">
+      {(showAllReviews ? reviews : reviews.slice(0, 2)).map((review) => (
+        <div key={review._id} className="border-b border-slate-50 last:border-0 pb-4 last:pb-0">
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-full bg-secondary-100 text-secondary-700 flex items-center justify-center font-bold text-xs">
+                {review.patient?.name?.charAt(0).toUpperCase()}
+              </div>
+              <span className="text-sm font-semibold text-slate-700">
+                {review.patient?.name}
+              </span>
+            </div>
+            <div className="flex items-center gap-0.5">
+              {[1, 2, 3, 4, 5].map((s) => (
+                <Star
+                  key={s}
+                  size={12}
+                  className={s <= review.rating ? "text-yellow-400 fill-yellow-400" : "text-slate-200"}
+                />
+              ))}
+            </div>
+          </div>
+          {review.comment && (
+            <p className="text-sm text-slate-500 ml-10">{review.comment}</p>
+          )}
+          <p className="text-xs text-slate-300 ml-10 mt-1">
+            {new Date(review.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+          </p>
+        </div>
+      ))}
+    </div>
+
+    {/* Show More / Show Less Button */}
+    {reviews.length > 2 && (
+      <button
+        onClick={() => setShowAllReviews(!showAllReviews)}
+        className="w-full mt-4 text-sm font-semibold text-primary-600 hover:text-primary-700 hover:bg-primary-50 py-2.5 rounded-xl transition-colors"
+      >
+        {showAllReviews
+          ? "Show Less"
+          : `Show ${reviews.length - 2} More Review${reviews.length - 2 !== 1 ? "s" : ""}`}
+      </button>
+    )}
+  </div>
+)}
 
             <button
               onClick={() =>

@@ -2,44 +2,31 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Calendar, Clock, IndianRupee, X,
-  CheckCircle2, AlertCircle, Stethoscope,
+  CheckCircle2, AlertCircle, Stethoscope, Star,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import DashboardLayout from "../../components/layout/DashboardLayout.jsx";
 import Loader from "../../components/common/Loader.jsx";
 import Button from "../../components/common/Button.jsx";
+import ReviewModal from "../../components/patient/ReviewModal.jsx";
 import {
   getMyAppointmentsApi,
   cancelAppointmentApi,
 } from "../../api/appointment.api.js";
+import { checkReviewExistsApi } from "../../api/review.api.js";
 
 const statusConfig = {
-  pending: {
-    label: "Pending",
-    class: "bg-yellow-50 text-yellow-700 border-yellow-200",
-    icon: AlertCircle,
-  },
-  confirmed: {
-    label: "Confirmed",
-    class: "bg-green-50 text-green-700 border-green-200",
-    icon: CheckCircle2,
-  },
-  completed: {
-    label: "Completed",
-    class: "bg-blue-50 text-blue-700 border-blue-200",
-    icon: CheckCircle2,
-  },
-  cancelled: {
-    label: "Cancelled",
-    class: "bg-red-50 text-red-700 border-red-200",
-    icon: X,
-  },
+  pending: { label: "Pending", class: "bg-yellow-50 text-yellow-700 border-yellow-200", icon: AlertCircle },
+  confirmed: { label: "Confirmed", class: "bg-green-50 text-green-700 border-green-200", icon: CheckCircle2 },
+  completed: { label: "Completed", class: "bg-blue-50 text-blue-700 border-blue-200", icon: CheckCircle2 },
+  cancelled: { label: "Cancelled", class: "bg-red-50 text-red-700 border-red-200", icon: X },
 };
 
-const AppointmentCard = ({ appointment, onCancel }) => {
+const AppointmentCard = ({ appointment, onCancel, onReview, reviewedMap }) => {
   const status = statusConfig[appointment.status] || statusConfig.pending;
   const StatusIcon = status.icon;
   const isPast = new Date(appointment.date) < new Date();
+  const isReviewed = reviewedMap[appointment._id];
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 hover:shadow-cardHover transition-all duration-300 overflow-hidden">
@@ -51,17 +38,11 @@ const AppointmentCard = ({ appointment, onCancel }) => {
               {appointment.doctor?.name?.charAt(0).toUpperCase()}
             </div>
             <div>
-              <h3 className="font-bold text-slate-800">
-                Dr. {appointment.doctor?.name}
-              </h3>
-              <p className="text-xs text-primary-600 font-medium">
-                {appointment.specialty?.name}
-              </p>
+              <h3 className="font-bold text-slate-800">Dr. {appointment.doctor?.name}</h3>
+              <p className="text-xs text-primary-600 font-medium">{appointment.specialty?.name}</p>
             </div>
           </div>
-          <span
-            className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${status.class} shrink-0`}
-          >
+          <span className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${status.class} shrink-0`}>
             <StatusIcon size={11} />
             {status.label}
           </span>
@@ -70,11 +51,7 @@ const AppointmentCard = ({ appointment, onCancel }) => {
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div className="flex items-center gap-2 text-sm text-slate-500">
             <Calendar size={14} className="text-primary-400 shrink-0" />
-            {new Date(appointment.date).toLocaleDateString("en-IN", {
-              day: "numeric",
-              month: "short",
-              year: "numeric",
-            })}
+            {new Date(appointment.date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
           </div>
           <div className="flex items-center gap-2 text-sm text-slate-500">
             <Clock size={14} className="text-primary-400 shrink-0" />
@@ -85,16 +62,8 @@ const AppointmentCard = ({ appointment, onCancel }) => {
             ₹{appointment.doctor?.consultationFee}
           </div>
           <div className="flex items-center gap-2 text-sm">
-            <span
-              className={`text-xs font-medium ${
-                appointment.payment?.status === "paid"
-                  ? "text-success"
-                  : "text-warning"
-              }`}
-            >
-              {appointment.payment?.status === "paid"
-                ? "✓ Paid"
-                : "Payment Pending"}
+            <span className={`text-xs font-medium ${appointment.payment?.status === "paid" ? "text-success" : "text-warning"}`}>
+              {appointment.payment?.status === "paid" ? "✓ Paid" : "Payment Pending"}
             </span>
           </div>
         </div>
@@ -109,13 +78,27 @@ const AppointmentCard = ({ appointment, onCancel }) => {
         )}
 
         {appointment.status === "confirmed" && !isPast && (
-          <Button
-            variant="danger"
-            onClick={() => onCancel(appointment._id)}
-            className="w-full text-sm py-2"
-          >
+          <Button variant="danger" onClick={() => onCancel(appointment._id)} className="w-full text-sm py-2">
             Cancel Appointment
           </Button>
+        )}
+
+        {appointment.status === "completed" && (
+          isReviewed ? (
+            <div className="flex items-center justify-center gap-1.5 text-sm text-secondary-600 bg-secondary-50 rounded-xl py-2 border border-secondary-100">
+              <Star size={14} className="fill-secondary-500 text-secondary-500" />
+              Reviewed
+            </div>
+          ) : (
+            <Button
+              variant="secondary"
+              onClick={() => onReview(appointment)}
+              className="w-full text-sm py-2"
+            >
+              <Star size={14} />
+              Rate Your Experience
+            </Button>
+          )
         )}
       </div>
     </div>
@@ -126,12 +109,23 @@ const MyAppointmentsPage = () => {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("all");
+  const [reviewedMap, setReviewedMap] = useState({});
+  const [reviewModalAppt, setReviewModalAppt] = useState(null);
   const navigate = useNavigate();
 
   const fetchAppointments = async () => {
     try {
       const res = await getMyAppointmentsApi();
       setAppointments(res.data.data);
+
+      // Check review status for completed appointments
+      const completed = res.data.data.filter((a) => a.status === "completed");
+      const reviewChecks = await Promise.all(
+        completed.map((a) => checkReviewExistsApi(a._id).then((r) => ({ id: a._id, reviewed: r.data.data.reviewed })))
+      );
+      const map = {};
+      reviewChecks.forEach((r) => { map[r.id] = r.reviewed; });
+      setReviewedMap(map);
     } catch {
       toast.error("Failed to load appointments");
     } finally {
@@ -144,8 +138,7 @@ const MyAppointmentsPage = () => {
   }, []);
 
   const handleCancel = async (id) => {
-    if (!window.confirm("Are you sure you want to cancel this appointment?"))
-      return;
+    if (!window.confirm("Are you sure you want to cancel this appointment?")) return;
     try {
       await cancelAppointmentApi(id, "Cancelled by patient");
       toast.success("Appointment cancelled");
@@ -162,21 +155,14 @@ const MyAppointmentsPage = () => {
     { key: "cancelled", label: "Cancelled" },
   ];
 
-  const filtered =
-    activeTab === "all"
-      ? appointments
-      : appointments.filter((a) => a.status === activeTab);
+  const filtered = activeTab === "all" ? appointments : appointments.filter((a) => a.status === activeTab);
 
   return (
     <DashboardLayout>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">
-            My Appointments
-          </h1>
-          <p className="text-slate-500 text-sm mt-1">
-            Track and manage your medical appointments.
-          </p>
+          <h1 className="text-2xl font-bold text-slate-800">My Appointments</h1>
+          <p className="text-slate-500 text-sm mt-1">Track and manage your medical appointments.</p>
         </div>
         <Button onClick={() => navigate("/patient/specialties")}>
           <Calendar size={16} />
@@ -184,16 +170,13 @@ const MyAppointmentsPage = () => {
         </Button>
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit mb-6 flex-wrap">
         {tabs.map(({ key, label }) => (
           <button
             key={key}
             onClick={() => setActiveTab(key)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-              activeTab === key
-                ? "bg-white text-primary-600 shadow-sm"
-                : "text-slate-500 hover:text-slate-700"
+              activeTab === key ? "bg-white text-primary-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
             }`}
           >
             {label}
@@ -215,13 +198,9 @@ const MyAppointmentsPage = () => {
           </div>
           <p className="font-semibold text-slate-700">No appointments found</p>
           <p className="text-slate-400 text-sm mt-1 mb-5">
-            {activeTab === "all"
-              ? "You haven't booked any appointments yet."
-              : `No ${activeTab} appointments.`}
+            {activeTab === "all" ? "You haven't booked any appointments yet." : `No ${activeTab} appointments.`}
           </p>
-          <Button onClick={() => navigate("/patient/specialties")}>
-            Book Your First Appointment
-          </Button>
+          <Button onClick={() => navigate("/patient/specialties")}>Book Your First Appointment</Button>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -230,9 +209,22 @@ const MyAppointmentsPage = () => {
               key={appt._id}
               appointment={appt}
               onCancel={handleCancel}
+              onReview={setReviewModalAppt}
+              reviewedMap={reviewedMap}
             />
           ))}
         </div>
+      )}
+
+      {reviewModalAppt && (
+        <ReviewModal
+          appointment={reviewModalAppt}
+          onClose={() => setReviewModalAppt(null)}
+          onSuccess={() => {
+            setReviewModalAppt(null);
+            fetchAppointments();
+          }}
+        />
       )}
     </DashboardLayout>
   );
