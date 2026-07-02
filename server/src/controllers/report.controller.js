@@ -6,6 +6,7 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { generateAIReport, generatePatientSummary } from "../services/ai.service.js";
 import { generateReportPDF, deleteFromCloudinary } from "../services/pdf.service.js";
+import { sendReportReadyNotification } from "../services/email.service.js";
 
 // ==================== TEMPLATES ====================
 
@@ -178,6 +179,22 @@ const createReport = asyncHandler(async (req, res) => {
     appointment.status = "completed";
     await appointment.save();
   }
+
+  // Send report ready email if finalized
+if (status === "finalized") {
+  try {
+    await sendReportReadyNotification({
+      email: appointment.patient.email,
+      patientName: appointment.patient.name,
+      doctorName: req.user.name,
+      specialtyName: appointment.specialty.name,
+      reportTitle: title,
+      pdfUrl: pdfResult.url,
+    });
+  } catch (err) {
+    console.error("Failed to send report ready email:", err.message);
+  }
+}
 
   const populated = await MedicalReport.findById(report._id)
     .populate("patient", "name email")
