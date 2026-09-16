@@ -363,7 +363,7 @@ export const generateReportPDF = async ({
 `;
 
   // Launch Puppeteer
- const browser = await puppeteer.launch({
+const browser = await puppeteer.launch({
   headless: true,
   args: [
     "--no-sandbox",
@@ -372,23 +372,46 @@ export const generateReportPDF = async ({
     "--disable-gpu",
   ],
 });
-  try {
-    const page = await browser.newPage();
 
-    await page.setContent(html, {
-      waitUntil: "networkidle0",
-    });
+try {
+  const page = await browser.newPage();
 
-    const pdfBuffer = await page.pdf({
-      format: "A4",
-      printBackground: true,
-      margin: {
-        top: "0",
-        right: "0",
-        bottom: "0",
-        left: "0",
-      },
-    });
+  await page.setDefaultNavigationTimeout(60000);
+
+  await page.setContent(html, {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+
+  // Wait for images without allowing a broken image
+  // to block PDF generation.
+  await page.evaluate(async () => {
+    const images = Array.from(document.images);
+
+    await Promise.all(
+      images.map((img) => {
+        if (img.complete) {
+          return Promise.resolve();
+        }
+
+        return new Promise((resolve) => {
+          img.addEventListener("load", resolve);
+          img.addEventListener("error", resolve);
+        });
+      })
+    );
+  });
+
+  const pdfBuffer = await page.pdf({
+    format: "A4",
+    printBackground: true,
+    margin: {
+      top: "0",
+      right: "0",
+      bottom: "0",
+      left: "0",
+    },
+  });
 
     const result = await new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
