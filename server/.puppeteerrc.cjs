@@ -1,5 +1,5 @@
-import { join } from "path";
+const path = require("path");
 
-export default {
-  cacheDirectory: join(import.meta.dirname, ".cache", "puppeteer"),
+module.exports = {
+  cacheDirectory: path.join(__dirname, ".cache", "puppeteer"),
 };
